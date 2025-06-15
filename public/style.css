@@ -1,0 +1,98 @@
+/* public/style.css */
+
+* { box-sizing: border-box; }
+body {
+    background-color: #131314; /* Main background from screenshot */
+    font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+    color: #e0e0e0;
+    margin: 0;
+    font-size: 16px;
+    display: flex;
+    height: 100vh;
+}
+
+/* --- Sidebar Styling (no changes) --- */
+#sidebar {
+    width: 260px; flex-shrink: 0; background-color: #1e1f20;
+    border-right: 1px solid #333; display: flex; flex-direction: column; padding: 1rem;
+}
+.sidebar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid #333; }
+#new-chat-button { background: #333; border: 1px solid #555; color: #e0e0e0; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; }
+#recent-chats-list { list-style: none; padding: 0; margin: 0; overflow-y: auto; }
+#recent-chats-list li { padding: 10px; border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#recent-chats-list li.active { background-color: #3b3b3b; }
+
+
+/* --- Main Application Container --- */
+#app-container {
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    padding: 0 1rem;
+    overflow: hidden; /* Add overflow hidden to the parent */
+}
+
+/* --- Centered Chat Wrapper --- */
+#chat-view-wrapper {
+    width: 100%;
+    max-width: 900px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* --- THIS IS THE FIX FOR THE MISSING BUTTON --- */
+#app-header {
+    display: flex; /* Re-enable the header */
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 0; /* Adjust padding for centered view */
+    flex-shrink: 0;
+}
+.header-title { font-weight: bold; }
+#save-pdf-button {
+    background: #262626; border: 1px solid #444; color: #e0e0e0;
+    padding: 6px 12px; border-radius: 6px; cursor: pointer;
+    font-family: inherit; transition: background-color 0.2s;
+}
+#save-pdf-button:hover { background-color: #333; }
+
+
+/* --- Chat Messages Area --- */
+#chat-messages {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 1.5rem 0;
+    display: flex;
+    flex-direction: column;
+    scrollbar-width: none;
+    /* --- THIS IS THE FIX FOR THE SCROLLING BUG --- */
+    min-height: 0;
+}
+#chat-messages::-webkit-scrollbar { display: none; }
+
+/* Initial View Styling */
+#initial-view {
+    text-align: center; margin: auto; /* Vertically and horizontally center */
+}
+.initial-view-title {
+    font-size: 3.5rem; font-weight: 500;
+    background: -webkit-linear-gradient(left, #4e8cff, #d262ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* Message Bubbles & Titles */
+.message { width: 100%; line-height: 1.6; word-wrap: break-word; margin-bottom: 1.5rem; }
+.user-message .message-content { background-color: #262626; padding: 0.75rem 1.25rem; border-radius: 12px; max-width: 80%; float: right; }
+.model-message strong, .model-message b { color: #00ff41; font-size: 1.1em; }
+.model-message li > strong:first-child, .model-message li > b:first-child { color: #ffae57; font-size: 1em; }
+
+/* --- Input Form --- */
+#chat-input-container { flex-shrink: 0; padding: 1rem 0 2rem 0; position: relative; }
+#chat-form { display: flex; align-items: center; background-color: #1e1f20; border-radius: 24px; padding: 0.75rem; }
+#user-input { flex-grow: 1; background: transparent; border: none; outline: none; color: #e0e0e0; font-size: 1rem; padding: 0 0.5rem; }
+#emoji-button { background: transparent; border: none; cursor: pointer; padding: 0 8px; }
+#send-button { background-color: #3b3b3b; border: none; border-radius: 50%; width: 40px; height: 40px; display: flex; justify-content: center; align-items: center; cursor: pointer; }
+#send-button svg { fill: #e0e0e0; }
+emoji-picker { position: absolute; bottom: 100px; left: 1.5rem; z-index: 100; display: none; }
