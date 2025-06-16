@@ -1,5 +1,3 @@
-// public/script.js
-
 document.addEventListener('DOMContentLoaded', () => {
     // --- Element References ---
     const chatMessages = document.getElementById('chat-messages');
@@ -16,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let conversationHistory = [];
     let currentChatId = null;
 
-    // --- FINAL PDF Generation with Print Stylesheet Method ---
+    // --- PDF Generation Logic ---
     savePdfButton.addEventListener('click', () => {
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
@@ -26,32 +24,29 @@ document.addEventListener('DOMContentLoaded', () => {
         savePdfButton.textContent = 'Generating...';
         savePdfButton.disabled = true;
 
-        // 1. Define the print-friendly CSS overrides
         const printStyles = `
-            body { background-color: #FFFFFF !important; }
+            body { 
+                background-color: #FFFFFF !important; 
+                font-family: 'Inter', sans-serif !important; 
+            }
             #chat-messages { color: #111827 !important; }
             .user-message .message-content { background-color: #f3f4f6 !important; }
-            .model-message strong, .model-message b { color: #16a34a !important; } /* Printer-friendly green */
-            .model-message li > strong:first-child, .model-message li > b:first-child { color: #d97706 !important; } /* Printer-friendly orange */
+            .model-message strong, .model-message b { color: #16a34a !important; font-weight: 700 !important; }
+            .model-message li > strong:first-child, .model-message li > b:first-child { color: #d97706 !important; font-weight: 700 !important; }
             #sidebar, #chat-input-container, #app-header { display: none !important; }
+            pre, code { font-family: 'Consolas', 'Menlo', 'Courier New', monospace !important; }
         `;
 
-        // 2. Create a <style> element and add it to the page
         const styleEl = document.createElement('style');
         styleEl.id = 'print-styles';
         styleEl.innerHTML = printStyles;
         document.head.appendChild(styleEl);
 
-        // 3. Generate the PDF from the now-styled live element
-        // We use a short timeout to ensure styles are applied before capture
         setTimeout(() => {
             pdf.html(source, {
                 callback: function (doc) {
-                    // 4. IMPORTANT: Remove the print styles to restore the UI
                     document.getElementById('print-styles').remove();
-                    
                     doc.save('gemini-chat-light.pdf');
-                    
                     savePdfButton.textContent = 'Save PDF';
                     savePdfButton.disabled = false;
                 },
@@ -60,7 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 width: pdfWidth - 40,
                 windowWidth: source.scrollWidth
             }).catch(err => {
-                // Ensure styles are removed even if there's an error
                 document.getElementById('print-styles').remove();
                 console.error("Error generating PDF:", err);
                 savePdfButton.textContent = 'Save PDF';
@@ -70,9 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 100);
     });
 
-    
-    // --- All Other Functions Remain Unchanged ---
-
+    // --- History & Core Chat Functions ---
     const getChatsFromStorage = () => JSON.parse(localStorage.getItem('gemini-chats')) || [];
     const saveChatsToStorage = (chats) => localStorage.setItem('gemini-chats', JSON.stringify(chats));
 
