@@ -1,58 +1,59 @@
-// server.js
-
 const express = require('express');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-require('dotenv').config(); // Loads environment variables from a .env file
+require('dotenv').config();
 
-// Initialize the Express application
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Check for API Key
 if (!process.env.GEMINI_API_KEY) {
     console.error("Error: GEMINI_API_KEY is not set in the .env file.");
-    process.exit(1); // Exit the process with an error code
+    process.exit(1);
 }
 
-// Initialize the Google Generative AI client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
-// Middleware setup
-app.use(express.static('public')); // Serve static files (HTML, CSS, JS) from the 'public' folder
-app.use(express.json());           // Enable JSON body parsing for POST requests
+// Increase payload size limit for multiple base64 files
+app.use(express.static('public'));
+app.use(express.json({ limit: '50mb' }));
 
-// API endpoint for chat functionality
 app.post('/chat', async (req, res) => {
     try {
-        const { message, history } = req.body;
+        const { message, history, files } = req.body;
+        const chat = model.startChat({ history: history || [] });
 
-        // Basic validation
-        if (!message) {
-            return res.status(400).json({ error: 'Message is required' });
+        const messageParts = [{ text: message }];
+
+        // If files were uploaded, loop through them and add to message parts
+        if (files && Array.isArray(files) && files.length > 0) {
+            files.forEach(file => {
+                if (file.data) {
+                    const base64Data = file.data.split(',')[1];
+                    messageParts.push({
+                        inlineData: {
+                            mimeType: file.mimeType,
+                            data: base64Data
+                        }
+                    });
+                }
+            });
         }
-
-        const chat = model.startChat({
-            history: history || [],
-        });
-
-        const result = await chat.sendMessage(message);
-        const response = await result.response;
-        const text = response.text();
+        
+        // Use sendMessageStream for potentially long responses from multimodal input
+        const result = await chat.sendMessageStream(messageParts);
+        let text = '';
+        for await (const chunk of result.stream) {
+            text += chunk.text();
+        }
 
         res.json({ response: text });
 
     } catch (error) {
-        // Log the detailed error to the server console for debugging
         console.error("Error in /chat endpoint:", error);
-
-        // Send a generic error message to the client
-        res.status(500).json({ error: 'An error occurred while communicating with the Gemini API.' });
+        res.status(500).json({ error: 'Failed to get response from Gemini' });
     }
 });
 
-// Start the server
 app.listen(port, () => {
-    console.log(`Server is running at http://localhost:${port}`);
-    console.log("Make sure you have set your GEMINI_API_KEY in the .env file.");
+    console.log(`Server running at http://localhost:${port}`);
 });
