@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatMessages = document.getElementById('chat-messages');
     const initialView = document.getElementById('initial-view');
     const chatForm = document.getElementById('chat-form');
-    const userInput = document.getElementById('user-input');
+    const userInput = document.getElementById('user-input'); // This is a <textarea>
     const sendButton = document.getElementById('send-button');
     const newChatButton = document.getElementById('new-chat-button');
     const recentChatsList = document.getElementById('recent-chats-list');
@@ -16,7 +16,22 @@ document.addEventListener('DOMContentLoaded', () => {
     let conversationHistory = [];
     let currentChatId = null;
 
-    // --- Core History Functions (No Changes) ---
+    // --- Textarea and Enter/Shift+Enter Logic ---
+    userInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            chatForm.dispatchEvent(new Event('submit', { cancelable: true }));
+        }
+    });
+
+    const adjustTextareaHeight = () => {
+        userInput.style.height = 'auto';
+        userInput.style.height = `${userInput.scrollHeight}px`;
+    };
+    userInput.addEventListener('input', adjustTextareaHeight);
+
+    
+    // --- History Functions (No changes needed) ---
     const getChatsFromStorage = () => JSON.parse(localStorage.getItem('gemini-chats')) || [];
     const saveChatsToStorage = (chats) => localStorage.setItem('gemini-chats', JSON.stringify(chats));
 
@@ -25,20 +40,27 @@ document.addEventListener('DOMContentLoaded', () => {
         recentChatsList.innerHTML = '';
         chats.forEach(chat => {
             const li = document.createElement('li');
-            li.textContent = chat.title;
             li.dataset.chatId = chat.id;
             if (chat.id === currentChatId) { li.classList.add('active'); }
-            li.addEventListener('click', () => loadChat(chat.id));
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'chat-title';
+            titleSpan.textContent = chat.title;
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'chat-actions';
+            actionsDiv.innerHTML = `<button data-action="rename" title="Rename"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.13,5.12L18.88,8.87M3,17.25V21H6.75L17.81,9.94L14.06,6.19L3,17.25Z" /></svg></button><button data-action="delete" title="Delete"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" /></svg></button>`;
+            li.appendChild(titleSpan);
+            li.appendChild(actionsDiv);
             recentChatsList.prepend(li);
         });
     };
-
+    
     const renderChat = (messages) => {
         chatMessages.innerHTML = '';
         messages.forEach(msg => addMessageToDOM(msg.role === 'user' ? 'user' : 'model', msg.parts[0].text));
     };
 
     const loadChat = (chatId) => {
+        if (chatId === currentChatId) return;
         const chats = getChatsFromStorage();
         const chat = chats.find(c => c.id === chatId);
         if (chat) {
@@ -54,11 +76,71 @@ document.addEventListener('DOMContentLoaded', () => {
         conversationHistory = [];
         chatMessages.innerHTML = '';
         chatMessages.appendChild(initialView);
-        initialView.style.display = 'flex'; // Use flex for centering
+        initialView.style.display = 'flex';
         userInput.value = '';
+        adjustTextareaHeight();
         userInput.focus();
         loadAndRenderSidebar();
     };
+    
+    const handleRename = (li, chatId) => {
+        const titleSpan = li.querySelector('.chat-title');
+        const currentTitle = titleSpan.textContent;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'rename-input';
+        input.value = currentTitle;
+        li.replaceChild(input, titleSpan);
+        input.focus();
+        input.select();
+        const saveRename = () => {
+            const newTitle = input.value.trim();
+            if (newTitle && newTitle !== currentTitle) {
+                const chats = getChatsFromStorage();
+                const chatIndex = chats.findIndex(c => c.id === chatId);
+                if (chatIndex !== -1) {
+                    chats[chatIndex].title = newTitle;
+                    saveChatsToStorage(chats);
+                }
+                titleSpan.textContent = newTitle;
+            }
+            li.replaceChild(titleSpan, input);
+        };
+        input.addEventListener('blur', saveRename);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') input.blur();
+            if (e.key === 'Escape') li.replaceChild(titleSpan, input);
+        });
+    };
+
+    const handleDelete = (chatId) => {
+        if (!confirm('Are you sure you want to delete this chat?')) return;
+        let chats = getChatsFromStorage();
+        chats = chats.filter(c => c.id !== chatId);
+        saveChatsToStorage(chats);
+        if (currentChatId === chatId) {
+            startNewChat();
+        } else {
+            loadAndRenderSidebar();
+        }
+    };
+
+    recentChatsList.addEventListener('click', (e) => {
+        const li = e.target.closest('li');
+        if (!li) return;
+        const chatId = li.dataset.chatId;
+        const actionButton = e.target.closest('[data-action]');
+        if (actionButton) {
+            const action = actionButton.dataset.action;
+            if (action === 'rename') {
+                handleRename(li, chatId);
+            } else if (action === 'delete') {
+                handleDelete(chatId);
+            }
+        } else {
+            loadChat(chatId);
+        }
+    });
 
     const addMessageToDOM = (sender, messageText) => {
         if (initialView.style.display !== 'none') {
@@ -97,64 +179,66 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Event Listeners ---
     newChatButton.addEventListener('click', startNewChat);
 
+    // --- THIS IS THE CORRECTED SUBMIT FUNCTION ---
     chatForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         const userMessage = userInput.value.trim();
         if (!userMessage) return;
+
+        // Add user message to state and display it
         addMessageToDOM('user', userMessage);
         conversationHistory.push({ role: 'user', parts: [{ text: userMessage }] });
-        saveCurrentChat();
-        const userMessageForApi = userInput.value;
+        saveCurrentChat(); // Save right after user sends
+        
+        // Reset the input field
         userInput.value = '';
+        adjustTextareaHeight(); // Reset height after sending
+
         sendButton.disabled = true;
+
         try {
+            // Fetch the response from the backend
             const response = await fetch('/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: userMessageForApi, history: conversationHistory.slice(0, -1) })
+                // Use the 'userMessage' variable which holds the clean text
+                body: JSON.stringify({ message: userMessage, history: conversationHistory.slice(0, -1) })
             });
+
             if (!response.ok) throw new Error((await response.json()).error || 'Request failed');
+            
             const data = await response.json();
             const modelMessage = data.response;
+            
+            // Add model message to state and display it
             addMessageToDOM('model', modelMessage);
             conversationHistory.push({ role: 'model', parts: [{ text: modelMessage }] });
-            saveCurrentChat();
+            saveCurrentChat(); // Save again after model replies
+
         } catch (error) {
             addMessageToDOM('model', `[SYSTEM_ERROR]: ${error.message}`);
         } finally {
-            sendButton.disabled = false;
+            sendButton.disabled = false; // Re-enable the send button
         }
     });
 
-    // --- PDF Logic ---
+    // --- Other Listeners ---
     savePdfButton.addEventListener('click', () => {
         const { jsPDF } = window.jspdf;
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
         const source = document.getElementById('chat-messages');
         const pdfWidth = pdf.internal.pageSize.getWidth();
-
         savePdfButton.textContent = 'Generating...';
         savePdfButton.disabled = true;
-
         pdf.html(source, {
             callback: function (doc) {
                 doc.save('gemini-chat.pdf');
                 savePdfButton.textContent = 'Save PDF';
                 savePdfButton.disabled = false;
             },
-            autoPaging: 'text',
-            margin: [20, 20, 20, 20],
-            width: pdfWidth - 40,
+            autoPaging: 'text', margin: [20, 20, 20, 20], width: pdfWidth - 40,
             windowWidth: source.scrollWidth,
-            html2canvas: {
-                backgroundColor: '#131314', // The correct background color
-                useCORS: true
-            }
-        }).catch(err => {
-            console.error("Error generating PDF:", err);
-            savePdfButton.textContent = 'Save PDF';
-            savePdfButton.disabled = false;
-            alert('Sorry, there was a critical error creating the PDF.');
+            html2canvas: { backgroundColor: '#131314', useCORS: true }
         });
     });
 
