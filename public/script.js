@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatMessages = document.getElementById('chat-messages');
     const initialView = document.getElementById('initial-view');
     const chatForm = document.getElementById('chat-form');
-    const userInput = document.getElementById('user-input'); // This is a <textarea>
+    const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
     const newChatButton = document.getElementById('new-chat-button');
     const recentChatsList = document.getElementById('recent-chats-list');
@@ -16,22 +16,63 @@ document.addEventListener('DOMContentLoaded', () => {
     let conversationHistory = [];
     let currentChatId = null;
 
-    // --- Textarea and Enter/Shift+Enter Logic ---
-    userInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            chatForm.dispatchEvent(new Event('submit', { cancelable: true }));
-        }
+    // --- FINAL PDF Generation with Print Stylesheet Method ---
+    savePdfButton.addEventListener('click', () => {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+        const source = document.getElementById('chat-messages');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+
+        savePdfButton.textContent = 'Generating...';
+        savePdfButton.disabled = true;
+
+        // 1. Define the print-friendly CSS overrides
+        const printStyles = `
+            body { background-color: #FFFFFF !important; }
+            #chat-messages { color: #111827 !important; }
+            .user-message .message-content { background-color: #f3f4f6 !important; }
+            .model-message strong, .model-message b { color: #16a34a !important; } /* Printer-friendly green */
+            .model-message li > strong:first-child, .model-message li > b:first-child { color: #d97706 !important; } /* Printer-friendly orange */
+            #sidebar, #chat-input-container, #app-header { display: none !important; }
+        `;
+
+        // 2. Create a <style> element and add it to the page
+        const styleEl = document.createElement('style');
+        styleEl.id = 'print-styles';
+        styleEl.innerHTML = printStyles;
+        document.head.appendChild(styleEl);
+
+        // 3. Generate the PDF from the now-styled live element
+        // We use a short timeout to ensure styles are applied before capture
+        setTimeout(() => {
+            pdf.html(source, {
+                callback: function (doc) {
+                    // 4. IMPORTANT: Remove the print styles to restore the UI
+                    document.getElementById('print-styles').remove();
+                    
+                    doc.save('gemini-chat-light.pdf');
+                    
+                    savePdfButton.textContent = 'Save PDF';
+                    savePdfButton.disabled = false;
+                },
+                autoPaging: 'text',
+                margin: [20, 20, 20, 20],
+                width: pdfWidth - 40,
+                windowWidth: source.scrollWidth
+            }).catch(err => {
+                // Ensure styles are removed even if there's an error
+                document.getElementById('print-styles').remove();
+                console.error("Error generating PDF:", err);
+                savePdfButton.textContent = 'Save PDF';
+                savePdfButton.disabled = false;
+                alert('Sorry, there was a critical error creating the PDF.');
+            });
+        }, 100);
     });
 
-    const adjustTextareaHeight = () => {
-        userInput.style.height = 'auto';
-        userInput.style.height = `${userInput.scrollHeight}px`;
-    };
-    userInput.addEventListener('input', adjustTextareaHeight);
-
     
-    // --- History Functions (No changes needed) ---
+    // --- All Other Functions Remain Unchanged ---
+
     const getChatsFromStorage = () => JSON.parse(localStorage.getItem('gemini-chats')) || [];
     const saveChatsToStorage = (chats) => localStorage.setItem('gemini-chats', JSON.stringify(chats));
 
@@ -78,70 +119,10 @@ document.addEventListener('DOMContentLoaded', () => {
         chatMessages.appendChild(initialView);
         initialView.style.display = 'flex';
         userInput.value = '';
-        adjustTextareaHeight();
         userInput.focus();
         loadAndRenderSidebar();
     };
     
-    const handleRename = (li, chatId) => {
-        const titleSpan = li.querySelector('.chat-title');
-        const currentTitle = titleSpan.textContent;
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'rename-input';
-        input.value = currentTitle;
-        li.replaceChild(input, titleSpan);
-        input.focus();
-        input.select();
-        const saveRename = () => {
-            const newTitle = input.value.trim();
-            if (newTitle && newTitle !== currentTitle) {
-                const chats = getChatsFromStorage();
-                const chatIndex = chats.findIndex(c => c.id === chatId);
-                if (chatIndex !== -1) {
-                    chats[chatIndex].title = newTitle;
-                    saveChatsToStorage(chats);
-                }
-                titleSpan.textContent = newTitle;
-            }
-            li.replaceChild(titleSpan, input);
-        };
-        input.addEventListener('blur', saveRename);
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') input.blur();
-            if (e.key === 'Escape') li.replaceChild(titleSpan, input);
-        });
-    };
-
-    const handleDelete = (chatId) => {
-        if (!confirm('Are you sure you want to delete this chat?')) return;
-        let chats = getChatsFromStorage();
-        chats = chats.filter(c => c.id !== chatId);
-        saveChatsToStorage(chats);
-        if (currentChatId === chatId) {
-            startNewChat();
-        } else {
-            loadAndRenderSidebar();
-        }
-    };
-
-    recentChatsList.addEventListener('click', (e) => {
-        const li = e.target.closest('li');
-        if (!li) return;
-        const chatId = li.dataset.chatId;
-        const actionButton = e.target.closest('[data-action]');
-        if (actionButton) {
-            const action = actionButton.dataset.action;
-            if (action === 'rename') {
-                handleRename(li, chatId);
-            } else if (action === 'delete') {
-                handleDelete(chatId);
-            }
-        } else {
-            loadChat(chatId);
-        }
-    });
-
     const addMessageToDOM = (sender, messageText) => {
         if (initialView.style.display !== 'none') {
             initialView.style.display = 'none';
@@ -175,75 +156,100 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     };
+    
+    userInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            chatForm.dispatchEvent(new Event('submit', { cancelable: true }));
+        }
+    });
 
-    // --- Event Listeners ---
-    newChatButton.addEventListener('click', startNewChat);
+    const adjustTextareaHeight = () => {
+        userInput.style.height = 'auto';
+        userInput.style.height = `${userInput.scrollHeight}px`;
+    };
+    userInput.addEventListener('input', adjustTextareaHeight);
 
-    // --- THIS IS THE CORRECTED SUBMIT FUNCTION ---
     chatForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         const userMessage = userInput.value.trim();
         if (!userMessage) return;
-
-        // Add user message to state and display it
         addMessageToDOM('user', userMessage);
         conversationHistory.push({ role: 'user', parts: [{ text: userMessage }] });
-        saveCurrentChat(); // Save right after user sends
-        
-        // Reset the input field
+        saveCurrentChat();
+        const userMessageForApi = userInput.value;
         userInput.value = '';
-        adjustTextareaHeight(); // Reset height after sending
-
+        adjustTextareaHeight();
         sendButton.disabled = true;
-
         try {
-            // Fetch the response from the backend
             const response = await fetch('/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // Use the 'userMessage' variable which holds the clean text
-                body: JSON.stringify({ message: userMessage, history: conversationHistory.slice(0, -1) })
+                body: JSON.stringify({ message: userMessageForApi, history: conversationHistory.slice(0, -1) })
             });
-
             if (!response.ok) throw new Error((await response.json()).error || 'Request failed');
-            
             const data = await response.json();
             const modelMessage = data.response;
-            
-            // Add model message to state and display it
             addMessageToDOM('model', modelMessage);
             conversationHistory.push({ role: 'model', parts: [{ text: modelMessage }] });
-            saveCurrentChat(); // Save again after model replies
-
+            saveCurrentChat();
         } catch (error) {
             addMessageToDOM('model', `[SYSTEM_ERROR]: ${error.message}`);
         } finally {
-            sendButton.disabled = false; // Re-enable the send button
+            sendButton.disabled = false;
+        }
+    });
+    
+    newChatButton.addEventListener('click', startNewChat);
+
+    recentChatsList.addEventListener('click', (e) => {
+        const li = e.target.closest('li');
+        if (!li) return;
+        const chatId = li.dataset.chatId;
+        const actionButton = e.target.closest('[data-action]');
+        if (actionButton) {
+            const action = actionButton.dataset.action;
+            if (action === 'rename') { handleRename(li, chatId); } 
+            else if (action === 'delete') { handleDelete(chatId); }
+        } else {
+            loadChat(chatId);
         }
     });
 
-    // --- Other Listeners ---
-    savePdfButton.addEventListener('click', () => {
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
-        const source = document.getElementById('chat-messages');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        savePdfButton.textContent = 'Generating...';
-        savePdfButton.disabled = true;
-        pdf.html(source, {
-            callback: function (doc) {
-                doc.save('gemini-chat.pdf');
-                savePdfButton.textContent = 'Save PDF';
-                savePdfButton.disabled = false;
-            },
-            autoPaging: 'text', margin: [20, 20, 20, 20], width: pdfWidth - 40,
-            windowWidth: source.scrollWidth,
-            html2canvas: { backgroundColor: '#131314', useCORS: true }
+    const handleRename = (li, chatId) => {
+        const titleSpan = li.querySelector('.chat-title');
+        const currentTitle = titleSpan.textContent;
+        const input = document.createElement('input');
+        input.type = 'text'; input.className = 'rename-input'; input.value = currentTitle;
+        li.replaceChild(input, titleSpan);
+        input.focus(); input.select();
+        const saveRename = () => {
+            const newTitle = input.value.trim();
+            if (newTitle && newTitle !== currentTitle) {
+                const chats = getChatsFromStorage();
+                const chatIndex = chats.findIndex(c => c.id === chatId);
+                if (chatIndex !== -1) { chats[chatIndex].title = newTitle; saveChatsToStorage(chats); }
+                titleSpan.textContent = newTitle;
+            }
+            li.replaceChild(titleSpan, input);
+        };
+        input.addEventListener('blur', saveRename);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') input.blur();
+            if (e.key === 'Escape') li.replaceChild(titleSpan, input);
         });
-    });
+    };
+
+    const handleDelete = (chatId) => {
+        if (!confirm('Are you sure you want to delete this chat?')) return;
+        let chats = getChatsFromStorage();
+        chats = chats.filter(c => c.id !== chatId);
+        saveChatsToStorage(chats);
+        if (currentChatId === chatId) { startNewChat(); } 
+        else { loadAndRenderSidebar(); }
+    };
 
     emojiButton.addEventListener('click', () => emojiPicker.classList.toggle('show'));
 
-    // --- Initial Load ---
     startNewChat();
 });
